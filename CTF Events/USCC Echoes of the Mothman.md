@@ -43,9 +43,9 @@ USERS_DB_FILE = './static/db/users'
 ```
 
 We navigate to /static/db/users and sure enough are able to download the file.  I then ran strings on this file and it has exactly what we are looking for! Scrolling to the top, we notice a whole bunch of users who seem to have been here for a very long time. It also contains their password hashes.
+```
 strings users
 
-```
 username
 admin
 password_hash
@@ -55,7 +55,7 @@ creation_date
 ```
 
 
-I decided to use the admin user. You could put this password hash into something like John the Ripper or Hashcat. Since this just appears to be an md5 hash, I put it into https://crackstation.net/ and it got the password right away: aliens4everlove
+I decided to use the admin user. You could put this password hash into something like John the Ripper or Hashcat. Since this just appears to be an md5 hash, I put it into https://crackstation.net/ and it got the password right away: `aliens4everlove`
 I then tried logging in with this user (with Burp Suite open), and it worked.
 
 At this point, it seems that we have the necessary tools to inject commands-- a user that will likely be deserialized using the vulnerable class. Due to using the username and password to actually log in, we would be looking to find a way to pass data to the 'set_welcome_msg' function that we looked at earlier.
