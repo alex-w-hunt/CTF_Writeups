@@ -1,0 +1,32 @@
+#Overview
+This web exploit begins with looking for information disclosed in the HTML source, moves on to understand some Python code, and then ends with command injection to view the flag.
+
+We connect to the website and right away "View Page Source" to look for any interesting tidbits. We notice the following line towards the bottom of the main webpage:
+<!-- TODO: remove source code at /static/source.zip when deploying to PROD -->
+
+
+We cross our fingers and hope that the source code still exists in that directory which should be easily accessible to us. Thankfully, visiting /static/source.zip downloads the source.zip file. We then move this into our working directory and unzip it.
+mv ~/Downloads/source.zip .
+unzip source.zip
+
+
+From here, we receive 3 files; app.py, db.py, and utils.py. 
+We can open up all three files and read through. There are a bunch of important things to take note of. First, in app.py there is a User class that is denoted as "for backwards compatibility".
+# here for backwards compatilibity
+class User:
+    def __init__(self, data):
+        for k, v in data.items():
+            cmd = 'self.%s = "%s"' % (k, v)
+            exec(cmd)
+        self.creation_date = datetime.now().strftime('%d/%m/%y')
+
+    def set_welcome_msg(self, msg):
+        cmd = 'self.welcome = "%s"' % msg
+        exec(cmd)
+
+
+Already, this class looks like a juicy target due to those exec() functions. Just from looking at this it seems like we might be able to do some sort of command injection if we are able to control the data that goes into these functions. However,  it's not that simple. The do_register function that is now being imported from the utils.py file is more secure-- the User class there does not contain exec() functions that we can leverage. So... then how do we leverage this old User class?
+
+That brings us to the db.py file. In this file there are two important pieces of info:
+Pickle is being used to serialize data
+A filepath
