@@ -1,6 +1,7 @@
-#Overview
+# Overview
 This web exploit begins with looking for information disclosed in the HTML source, moves on to understand some Python code, and then ends with command injection to view the flag.
 
+# Solving the box
 We connect to the website and right away "View Page Source" to look for any interesting tidbits. We notice the following line towards the bottom of the main webpage:
 ```
 <!-- TODO: remove source code at /static/source.zip when deploying to PROD -->
