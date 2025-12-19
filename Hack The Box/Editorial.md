@@ -7,6 +7,18 @@
 - Platform: Linux
 - HTB Rating: Easy - Not Too Easy
 
+### Vulnerabilities
+- The web application allows arbitrary file upload due to having no extension, content, or mime type validation.
+- The web application returns the file path of the uploaded file to the user, facilitating possible exploitation attempts.
+- The web application allows Server-Side Request Forgery (SSRF) due to a lack of sanitization and validation on user input into the publishing form.
+- Static passwords are hard-coded and further re-used for login to SSH.
+- Outdated python libraries alongside excessive privileges given to a python script created a privilege escalation vector.
+
+### Strengths
+- Nginx was used without any file execution capability, rendering any uploaded files only able to be served statically and preventing easy code execution.
+- File uploads were assigned a random 32 character ID, making it almost impossible to determine the filename without it being returned to the user.
+- Absolute paths used in the sudo command prevent quick privilege escalation via PATH manipulation.
+
 # Solving user.txt
 As we are starting off this machine with no information, I began with the typical nmap scans. We are given a pretty common setup, seeing SSH open and a single webserver on port 80.
 ```
