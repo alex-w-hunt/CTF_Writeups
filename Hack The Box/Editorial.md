@@ -42,7 +42,7 @@ While poking around the website, I ran a number of directory and file brute forc
 </script>
 ```
 
-Taking note that this script was printing the uploaded file path to the console as well initiating the request upon clicking "Preview", this sent me looking for a file upload vulnerability. Interestingly, this app makes great use a best practice in mitigating file upload vulnerabilities— it is changing the filename to a long, random ID upon upload. This however is obviously counteracted by the fact that it then displays the path and new name directly to the user in the web console.
+Taking note that this script was printing the uploaded file path to the console as well initiating the request upon clicking "Preview", this sent me looking for a file upload vulnerability. Interestingly, this app makes great use a best practice in mitigating file upload vulnerabilities— it is changing the filename to a long, random ID upon upload. This however is obviously counteracted by the fact that it then displays the path and new name directly to the user in the dev console and web response.
 <img width="772" height="264" alt="image" src="https://github.com/user-attachments/assets/226874b3-bfd5-4590-8f02-bff5efd9f568" />
 _Burp Suite request/response showing the new filename returned to the user_
 
