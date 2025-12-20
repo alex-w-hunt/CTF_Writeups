@@ -1,0 +1,81 @@
+# Key Takeaways
+- Creation of a script to run through interesting files/folders in accessible users home directories may yield useful information. (root.txt)
+- When utilities (like runas) are not returning errors and feedback, confirm their functionality with simple commands that are known to work before trying more finnicky syntax. (root.txt)
+
+# Overview
+- Platform: Windows
+- HTB Rating: Easy - Medium
+
+### Vulnerabilities
+- An FTP service was left open to Anonymous access, allowing an attacker to gain useful information from the documents inside.
+- Telnet usage should generally be replaces with SSH as the unecrypted communication of Telnet is unideal for production environments.
+- Locally stored Admin credentials provides an easy vector for privilege escalation via the Runas.exe Windows utility. A service account should be used in place of giving the user full access to stored Admin credentials.
+- Windows Server 2008 is long outdated and is no longer receiving security updates.
+
+### Strengths
+- Group policy is being used as an app-blocking solution as a **whitelist**, disallowing many Windows utilities and newly downloaded executables that could be used maliciously.
+
+# Solving user.txt
+We start off the machine with only the IP, so I began with the typical nmap scans to look for open TCP and UDP ports.
+```
+21/tcp open  ftp     Microsoft ftpd
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+|_Can't get directory listing: PASV failed: 425 Cannot open data connection.
+| ftp-syst:
+|_  SYST: Windows_NT
+23/tcp open  telnet  Microsoft Windows XP telnetd
+| telnet-ntlm-info:
+|   Target_Name: ACCESS
+|   NetBIOS_Domain_Name: ACCESS
+|   NetBIOS_Computer_Name: ACCESS
+|   DNS_Domain_Name: ACCESS
+|   DNS_Computer_Name: ACCESS
+|_  Product_Version: 6.1.7600
+80/tcp open  http    Microsoft IIS httpd 7.5
+|_http-title: MegaCorp
+| http-methods:
+|   Supported Methods: OPTIONS TRACE GET HEAD POST
+|_  Potentially risky methods: TRACE
+|_http-server-header: Microsoft-IIS/7.5
+```
+
+That FTP server looks very interesting as it appears we have anonymous access. However, I like to begin running scans for interesting directories, files, and vhosts while I work on other things, so I pointed `fuff` at port 80 first. These scans returned nothing of note.
+
+I then turned my attention toward the FTP server, logging in as Anonymous and without a password. This seems like a very strong lead, as we are able to find a `backup.mdb` file and a `Access Control.zip` archive.
+<img width="478" height="331" alt="image" src="https://github.com/user-attachments/assets/31bd98f0-57d5-4fd9-a88e-c9afd7387bc6" />
+_FTP server with .mdb and .zip files_
+
+Due to the types of files we are transferring, I first switched the FTP transfer mode to binary using the command `binary`. The files were then transferred via the `get` command.
+
+I initially tried to simply unzip the archive, however it gave me the message "unsupported compression method 99". A quick Google search verified that this usually means it is an encrypted archive. While I likely should have moved onto the .mdb file at this point, I initially decided to try cracking the zip password. To do this, I used `zip2john Access\ Control.zip > ziphash.txt` and then ran that zip file through Hashcat— this did not crack the password.
+
+I then moved on the .mdb file. I didn't really know what this file type was, so I first did some research. It appears to be a Microsoft Access database file, and there is a handy library that can be used on Linux to interact with it: [mdbtools](https://github.com/mdbtools/mdbtools). This can be installed easily with `apt install mdbtools`.
+
+I first listed the tables of the database using `mdb-tables backup.mdb`. From this list, the one that stood out as the most interesting target was the auth-users table. I dumped the information from that table using `mdb-json backup.mdb auth_user`. We got some usernames and passwords from that.
+```json
+└──╼ $mdb-json backup.mdb auth_user
+{"id":25,"username":"admin","password":"admin","Status":1,"last_login":"08/23/18 21:11:47","RoleID":26}
+{"id":27,"username":"engineer","password":"accessXXXXXXXXXX","Status":1,"last_login":"08/23/18 21:13:36","RoleID":26}
+{"id":28,"username":"backup_admin","password":"admin","Status":1,"last_login":"08/23/18 21:14:02","RoleID":26}
+```
+
+I tried all of these username and password combinations to log into telnet first, however the one that would have worked (engineer) was not in the TelnetClients group, so we couldn't get a connection. This did however tell us that we had a working username and password in case we needed it later.
+
+Next, I tried using the most unique password we found (the one for the engineer user) as the password for the zip archive. This did allow us to successfully extract the archive with 7zip: `7z x Access\ Control.zip`.
+
+Extracting this archive reveals a .pst file inside, again something I am unfamiliar with. Doing some research, this seems to be a Personal Storage Table, and is used to store messages, emails, etc. While there are numerous utilities to view the items in a .pst file, I went the route of installing Evolution and importing the file. Evolution can be installed quickly with `apt install evolution`. The file can then be imported via File > Import... > Import a single file > Choose the file and import. This yielded the following email:
+```
+Hi there,
+
+The password for the “security” account has been changed to 4Cc3ssXXXXXXXXXX.  Please ensure this is passed on to your engineers.
+
+Regards,
+
+John
+```
+
+These credentials get us into the machine via telnet, where we are then able to grab the user.txt flag.
+<img width="376" height="277" alt="image" src="https://github.com/user-attachments/assets/1633a755-740b-468a-9e69-deec71982755" />
+_Using the found credentials to get a telnet session and retrieve user.txt_
+
+# Solving root.txt
