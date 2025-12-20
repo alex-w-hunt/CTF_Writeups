@@ -1,6 +1,7 @@
 # Key Takeaways
 - Creation of a script to run through interesting files/folders in accessible users home directories may yield useful information. (root.txt)
 - When utilities (like runas) are not returning errors and feedback, confirm their functionality with simple commands that are known to work before trying more finnicky syntax. (root.txt)
+- When forced to utilize unindeal shell environments, focus effort initially on upgrading the shell to something more usable. (root.txt)
 
 # Overview
 - Platform: Windows
@@ -8,8 +9,8 @@
 
 ### Vulnerabilities
 - An FTP service was left open to Anonymous access, allowing an attacker to gain useful information from the documents inside.
-- Telnet usage should generally be replaces with SSH as the unecrypted communication of Telnet is unideal for production environments.
-- Locally stored Admin credentials provides an easy vector for privilege escalation via the Runas.exe Windows utility. A service account should be used in place of giving the user full access to stored Admin credentials.
+- Telnet usage should generally be replaced with SSH as the unecrypted communication of Telnet is unideal for production environments.
+- Locally stored Admin credentials provide an easy vector for privilege escalation via the Runas.exe Windows utility. A service account should be used in place of giving the user full access to stored Admin credentials.
 - Windows Server 2008 is long outdated and is no longer receiving security updates.
 
 ### Strengths
