@@ -95,7 +95,7 @@ As I enumerated the machine for possible privilege escalation vectors, I took no
 
 _Administrator credentials stored in the Windows Credential Manager_
 
-It should be noted that it took me a bit of time to run the necessary command to spot these credentials. That said, the creator of this challenge did leave a unique hint in the form of a `ZKAccess3.5 Security System.lnk` file in the `C:\Users\Public\Desktop\` directory. It is possible to pull strings out of .lnk files to see what kind of information they have. Running a command like the following would have let us know that we should be looking to use the `runas.exe` command to use stored Admin credentials: `findstr /R /N "." "ZKAccess3.5 Security System.lnk"`.
+It should be noted that it took me a bit of time to run the necessary command to spot these credentials. That said, the creator of this challenge did leave a unique hint in the form of a `ZKAccess3.5 Security System.lnk` file in the `C:\Users\Public\Desktop\` directory which I didn't see on my first run through. It is possible to pull strings out of .lnk files to see what kind of information they have. Running a command like the following would have let us know that we should be looking to use the `runas.exe` command to use stored Admin credentials: `findstr /R /N "." "ZKAccess3.5 Security System.lnk"`.
 ```
 1:L?F?@ ??7???7???#?P/P?O? ?:i?+00?/C:\R1M?:Windows???:?M?:*wWindowsV1MV?System32???:?MV?*?System32X2P?:?
                                                                                                           runas.exe???:1??:1?*Yrunas.exeL-K??E?C:\Windows\System32\runas.exe#..\..\..\Windows\System32\runas.exeC:\ZKTeco\ZKAccess3.5G/user:ACCESS\Administrator /savecred "C:\ZKTeco\ZKAccess3.5\Access.exe"'C:\ZKTeco\ZKAccess3.5\img\AccessNET.ico?%SystemDrive%\ZKTeco\ZKAccess3.5\img\AccessNET.ico%SystemDrive%\ZKTeco\ZKAccess3.5\img\AccessNET.ico?%?
@@ -106,7 +106,7 @@ It should be noted that it took me a bit of time to run the necessary command to
                                       )??[?     ??1SPS??XF?L8C???&?m?e*S-1-5-21-953262931-566350628-63446256-500
 ```
 
-In the future, it may be worth making a quick run through each file in the first couple layers of any accessible folders in the C:\Users\ directory. I created the following PowerShell one-liner to enumerate all files.
+In the future, it may be worth making a quick run through each file in the first couple layers of any accessible folders in the C:\Users\ directory. I created the following PowerShell one-liner to enumerate all files in this directory with some recursion.
 ```powershell
 $outFile = ".\userfiles.txt"; Remove-Item $outFile -ErrorAction SilentlyContinue; $basePath = "C:\Users"; $results = @(); Get-ChildItem -Path $basePath -Force -ErrorAction SilentlyContinue | ForEach-Object {$results += $_; if ($_.PSIsContainer) {Get-ChildItem -Path $_.FullName -Force -ErrorAction SilentlyContinue | ForEach-Object {$results += $_; if ($_.PSIsContainer) {Get-ChildItem -Path $_.FullName -Force -ErrorAction SilentlyContinue | ForEach-Object {$results += $_}}}}}; $results = $results | Sort-Object FullName; foreach ($item in $results) {$depth = ($item.FullName -split "\\").Count - 3; if ($depth -lt 0) { $depth = 0 }; $indent = "--" * $depth; $line = "$indent $($item.FullName)"; Write-Host $line; Add-Content -Path $outFile -Value $line}
 ```
