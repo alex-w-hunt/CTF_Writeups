@@ -1,5 +1,5 @@
 # Key Takeaways
-- Creation of a script to run through interesting files/folders in accessible users home directories may yield useful information. (root.txt)
+- Using a script to run through interesting files/folders in accessible home directories may yield useful information. (root.txt)
 - When utilities (like runas) are not returning errors and feedback, confirm their functionality with simple commands that are known to work before trying more finnicky syntax. (root.txt)
 - When forced to utilize unindeal shell environments, focus effort initially on upgrading the shell to something more usable. (root.txt)
 
