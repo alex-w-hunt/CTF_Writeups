@@ -7,7 +7,7 @@
 - HTB Rating: Easy - Medium
 
 ### Vulnerabilities
-- Poor password hygiene, leaving easily brute-forced passwords on some user accounts and as the password vault key.
+- Poor password hygiene, leaving easily brute-forced passwords on some user accounts and the password vault key.
 - Overly permissive AD ACEs that facilitated lateral movement between numerous accounts alongside domain takeover via DCSync.
 
 ### Strengths
@@ -53,7 +53,7 @@ evil-winrm -i 10.10.11.42 -u Olivia -p ichliebedich
 ```
 
 Even though I now had access and could begin looking for privilege escalation vectors from this account, I didn't want to ignore the possible information I could receive from the other open ports.
-I tried logging into FTP.
+FTP access with our current user failed.
 ```
 └──╼ $ftp 10.10.11.42
 Connected to 10.10.11.42.
@@ -67,7 +67,7 @@ ftp> exit
 221 Goodbye.
 ```
 
-I tried zone transferring from the DNS server.
+DNS zone transfer failed.
 ```
 └──╼ $dig axfr administrator.htb @10.10.11.42
 
@@ -76,7 +76,7 @@ I tried zone transferring from the DNS server.
 ; Transfer failed.
 ```
 
-I tried seeing if there were any interesting SMB shares available.
+SMB shares showed that we only had read access to the default DC shares.
 ```
 └──╼ $netexec smb 10.10.11.42 -u Olivia -p ichliebedich --shares
 SMB         10.10.11.42     445    DC               [*] Windows Server 2022 Build 20348 x64 (name:DC) (domain:administrator.htb) (signing:True) (SMBv1:False)
@@ -91,7 +91,7 @@ SMB         10.10.11.42     445    DC               NETLOGON        READ        
 SMB         10.10.11.42     445    DC               SYSVOL          READ            Logon server share
 ```
 
-None of this returned anything interesting. At this point, it felt like time to start looking for privilege escalation vectors while logged into the Olivia account. Initially, I ran through a lot of the standard checks— looking for services with interesting permissions, looking for custom software, checking user and group privileges, among other things. However, something I can take away from this box is that if you have access to run BloodHound in an AD environment, do it right away as it would have saved me some time here.
+At this point, it felt like time to start looking for privilege escalation vectors while logged into the Olivia account. Initially, I ran through a lot of the standard checks— looking for services with interesting permissions, looking for custom software, checking user and group privileges, among other things. However, something I can take away from this box is that if you have access to run BloodHound in an AD environment, do it right away as it would have saved me some time here.
 
 I eventually uploaded a legacy BloodHound executable via WinRM, and then executed it to collect AD information.
 ```
