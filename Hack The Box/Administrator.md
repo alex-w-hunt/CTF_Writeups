@@ -1,19 +1,21 @@
 # Key Takeaways
 - If you have access to a user account, BloodHound is your best friend. (user.txt)
-- 
+- Be aware of potential clock skew errors when Kerberoasting via a remote machine. (root.txt)
 
 # Overview
 - Platform: Windows
 - HTB Rating: Easy - Medium
 
 ### Vulnerabilities
-
+- Poor password hygiene, leaving easily brute-forced passwords on some user accounts and as the password vault key.
+- Overly permissive AD ACEs that facilitated lateral movement between numerous accounts alongside domain takeover via DCSync.
 
 ### Strengths
-
+- Usage of a password manager to generate long, complex passwords.
+- FTP permissions given to select user accounts prevented initial access to the password vault.
 
 # Solving user.txt
-This box is started out with user credentials for the user Olivia. I still started things out with the usual nmap scans to see what services would be available on the machine.
+This box is started out with user credentials for the user Olivia, `Olivia:ichliebedich`. I still started things out with the usual nmap scans to see what services would be available on the machine.
 ```
 └──╼ $sudo nmap -sS -v -p- 10.10.11.42
 PORT      STATE SERVICE
