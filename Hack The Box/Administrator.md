@@ -174,7 +174,7 @@ ftp> dir
 226 Transfer complete.
 ```
 
-I used `pwsafe2john` to pull the masterkey hash from the file, and the tried to crack it via John the Ripper. This cracked the password vault key and allowed us to gain access.
+I used `pwsafe2john` to pull the masterkey hash from the file, and then tried to crack it via John the Ripper. This cracked the password vault key and allowed us to gain access.
 ```
 └──╼ $pwsafe2john Backup.psafe3 > Backup.hash
 
@@ -195,6 +195,7 @@ I then installed "passwordsafe" and accessed the vault by selecting the Backup.p
 ```
 
 We are given three user's and their passwords.
+
 <img width="500" height="353" alt="image" src="https://github.com/user-attachments/assets/cbf857d5-6b06-4132-a5d9-564deff085a7" />
 
 I copied each password out and inspected the users in BloodHound. Based on the "Enabled: False" data in BloodHound, it appeared that the alexander@administrator.htb and emma@administrator.htb accounts were inactive. Since the only active account was emily@administrator.htb, I started by logging in to the machine via WinRM as Emily.
