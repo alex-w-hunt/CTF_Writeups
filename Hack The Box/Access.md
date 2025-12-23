@@ -43,6 +43,7 @@ We start off the machine with only the IP, so I began with the typical nmap scan
 That FTP server looks very interesting as it appears we have anonymous access. However, I like to begin running scans for interesting directories, files, and vhosts while I work on other things, so I pointed `fuff` at port 80 first. These scans returned nothing of note.
 
 I then turned my attention toward the FTP server, logging in as Anonymous and without a password. This seems like a very strong lead, as we are able to find a `backup.mdb` file and a `Access Control.zip` archive.
+
 <img width="478" height="331" alt="image" src="https://github.com/user-attachments/assets/31bd98f0-57d5-4fd9-a88e-c9afd7387bc6" />
 
 _FTP server with .mdb and .zip files_
