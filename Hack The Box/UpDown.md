@@ -129,5 +129,66 @@ index.php               [Status: 200, Size: 0, Words: 1, Lines: 1, Duration: 47m
 ```
 
 I used git-dumper to clone the repository to my side and begin looking for sensitive/useful information.
+```
+└──╼ $git-dumper http://siteisup.htb/dev/.git ./gitdump
+[-] Testing http://siteisup.htb/dev/.git/HEAD [200]
+[-] Testing http://siteisup.htb/dev/.git/ [200]
+[-] Fetching .git recursively
+```
+
+After looking through the repository, it is clear that this seems to be the source code and configuration files for a beta version of _siteisup_. There is a `.htaccess` file which specifies an interesting header that is necessary to navigate to the webpages on this webserver.
+```
+└──╼ $cat .htaccess
+SetEnvIfNoCase Special-Dev "only4dev" Required-Header
+Order Deny,Allow
+Deny from All
+Allow from env=Required-Header
+```
+
+Considering that we already found a `dev.siteisup.htb` vhost which was forbidden, it seemed likely that we may now be able to access the page if we just include this new header. While routing my traffic through Burp Suite, I used a Match and Replace rule within the Proxy settings to always add the Special-Dev header to each request.
+<img width="885" height="245" alt="image" src="https://github.com/user-attachments/assets/98601f13-6fec-4cb2-b879-30a99ead48b6" />
+
+I then navigated to `http://dev.siteisup.htb` and was greeted by a beta version of the _siteisup_ webpage, however this one seems to take an **uploaded** file as the input to check websites in mass.
+
+As we have the source code for this new app from the .git repository, I began by reading through the code for each page and looking for places that could be vulnerable.
+
+I started with `index.php`.
+```
+└──╼ $cat index.php
+<b>This is only for developers</b>
+<br>
+<a href="?page=admin">Admin Panel</a>
+<?php
+        define("DIRECTACCESS",false);
+        $page=$_GET['page'];
+        if($page && !preg_match("/bin|usr|home|var|etc/i",$page)){
+                include($_GET['page'] . ".php");
+        }else{
+                include("checker.php");
+        }
+?>
+```
+
+Right away, it looks like there could possibly be some creative LFI vectors as the page is using the PHP _include_ function alongside unsanitized user input. That said, it is preventing common inputs for LFI such as `/etc` and `/home`. I kept this in the back of my mind but moved onto the next page.
+
+Next, I analyzed the code that goes into the actual processing and uploading of the file, `checker.php`. This page looks extremely interesting, as it has some clear spots that may be able to be exploited. I broke down each part of the code to help me visualize how I might accomplish this.
+1. Upon making a POST request using the "check" parameter to `checker.php`, the logic starts by checking to make sure the file is less than 10 kb.
+```php
+if($_POST['check']){
+        # File size must be less than 10kb.
+        if ($_FILES['file']['size'] > 10000) {
+        die("File too large!");
+```
+2. Next, the file `$file` variable is created from the filename included in the POST parameter. This filename then has its extension checked to see if it matches a blacklist. **The use of a blacklist is extremely important here. It can be noted that the .phar filetype is NOT blacklisted.**
+```
+$file = $_FILES['file']['name'];
+
+# Check if extension is allowed.
+$ext = getExtension($file);
+if(preg_match("/php|php[0-9]|html|py|pl|phtml|zip|rar|gz|gzip|tar/i",$ext)){
+        die("Extension not allowed!");
+}
+```
+
 
 # Solving root.txt
