@@ -274,7 +274,7 @@ def request_two():
 	r = requests.get(burp0_url, headers=burp0_headers)
 	print(r.text)
 
-timestamp = int(time.time()) + 3
+timestamp = int(time.time()) #+ 3
 t1 = threading.Thread(target=request_one)
 t1.start()
 time.sleep(0.1)
