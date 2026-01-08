@@ -32,7 +32,7 @@ I first visited the webserver by navigating to `http://10.10.11.177`. At inital 
 
 First, this website seems to function to test the availability of other websites. If our input is not properly sanitized, Server Side Request Forgery (SSRF) seems like a great thing to test here. The next thing that seems interesting is the "Debug mode" functionality— this could lend itself to retrieving feedback from an SSRF attack or command injection if the code is passing our input to unsafe system functions. The final thing that stands out is the `siteisup.htb` at the very bottom, it would be worth adding this domain to our hosts file so that we can scan for other Vhosts.
 
-To start determining if any of these potentially vulnerabilities exist, I began by running ffuf in the background to look for Vhosts. This quickly found the `dev.siteisup.htb` vhost.
+To start determining if any of these potential vulnerabilities exist, I began by running ffuf in the background to look for Vhosts. This quickly found the `dev.siteisup.htb` vhost.
 ```
 └──╼ $ffuf -w /usr/share/wordlists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt:FUZZ -u http://siteisup.htb/ -H 'Host: FUZZ.siteisup.htb' -fs 1131
 
@@ -69,7 +69,7 @@ While testing other potential vectors, I began using a python script to enumerat
 Since we found that there is an available `dev.siteisup.htb` Vhost, I tried navigating there but found that we do not have access.
 <img width="536" height="222" alt="image" src="https://github.com/user-attachments/assets/23242a4d-4fe6-4bcb-bf46-e139909f3cfa" />
 
-Before diving down any rabbit holes, I decided to go to finish enumerating the initial webserver, which means looking for files and directories. Using fuff again, I quickly found that there is a `/dev` directory, with a `.git` folder inside, something that often can provide a lot of information.
+Before diving down any rabbit holes, I decided to finish enumerating the initial webserver, which means looking for files and directories. Using fuff again, I quickly found that there is a `/dev` directory, with a `.git` folder inside, something that often can provide a lot of information.
 ```
 └──╼ $ffuf -w /usr/share/wordlists/seclists/Discovery/Web-Content/raft-medium-words.txt -u http://siteisup.htb/FUZZ -ic -e .php,.conf,.txt
 
@@ -205,7 +205,7 @@ $final_path = $dir.$file;
 move_uploaded_file($_FILES['file']['tmp_name'], "{$final_path}");
 ```
 
-5. The file is then read, splitting each entry by newline and running the resulting data through the `isitup` function (which checks for a 200 response code using cURL). Furthermore, before running it through the checker function, it validates specifically that the pdata:// and ftp:// wrappers are not used within the provided URI.
+5. The file is then read, splitting each entry by newline and running the resulting data through the `isitup` function (which checks for a 200 response code using cURL). Furthermore, before running it through the checker function, it validates specifically that the data:// and ftp:// wrappers are not used within the provided URI.
 ```php
 # Read the uploaded file.
 $websites = explode("\n",file_get_contents($final_path));
@@ -244,6 +244,7 @@ http://10.10.14.14/index.php
 2. Get the current timestamp and hash it via md5 to get the directory name used by the server
 ```python
 timestamp = int(time.time())
+mdhash = hashlib.md5(str(timestamp).encode()).hexdigest()
 ```
 3. While `checker.php` is busy requesting the initial _actual_ websites, make your own separate web request to `http://dev.siteisup.htb/uploads/<md5hashed_timestamp>/<filename>`
 _Due to the speed in which these things happen, I wrote a Python script that takes advantage of threading to make the web requests at nearly the same time. It is also worth noting that depending on the desync in time between your attacking system and the vulnerable server, the timestamp may need to be offset by 1 or more second(s)._
@@ -335,7 +336,7 @@ lxd:x:998:100::/var/snap/lxd/common/lxd:/bin/false
 developer:x:1002:1002::/home/developer:/bin/bash
 ```
 
-Now that I knew I could execute code, I started trying to get a reverse shell via PHP functions such as `exec()` and `shell_exec()`, however I wasn't getting anywhere. Confused about the lack response, I decide to check on what functions were disallowed by using the following PHP payload.
+Now that I knew I could execute code, I started trying to get a reverse shell via PHP functions such as `exec()` and `shell_exec()`, however I wasn't getting anywhere. Confused about the lack of responses, I decide to check on what functions were disallowed by using the following PHP payload.
 ```
 php = "<?php echo ini_get('disable_functions') ?>"
 ```
