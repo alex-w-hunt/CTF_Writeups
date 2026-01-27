@@ -161,7 +161,7 @@ At this point, I tried a number of things which did not end up being helpful:
 
 This was a huge learning experience for me because after wasting a bunch of time, I finally landed on LDAP as a place that I might be able to extract further information. This wasn't something I was super familiar with doing, but immediately jumped up on the list of important items to look into, as it turned out to be extremely useful and less time consuming than expected.
 
-I utilized [windapsearch](https://github.com/ropnop/windapsearch) to enumerate objects anonymously, finding that you can list all atrributes on user objects. This resutls in finding an attribute named `cascadeLegacyPwd` on the `r.thompson` user with a value of `clk0bjVldmE=`.
+I utilized [windapsearch](https://github.com/ropnop/windapsearch) to enumerate objects anonymously, finding that you can list all atrributes on user objects. This resulted in finding an attribute named `cascadeLegacyPwd` on the `r.thompson` user with a value of `clk0bjVldmE=`.
 ```
 └──╼ $python3 windapsearch.py -u "" --dc-ip 10.129.4.254 -U --full
 [+] No username provided. Will try anonymous bind.
@@ -220,7 +220,7 @@ msDS-SupportedEncryptionTypes: 0
 cascadeLegacyPwd: clk0bjVldmE=
 ```
 
-This value at firce glance looks base64 encoded, so I decoded it and it produces the string, `rY4n5eva`.
+This value at first glance looks base64 encoded, so I decoded it and it produces the string, `rY4n5eva`.
 ```
 └──╼ $echo 'clk0bjVldmE=' | base64 -d
 rY4n5eva
@@ -322,7 +322,7 @@ getting file Meeting_Notes_June_2018.html of size 13312 as Meeting_Notes_June_20
 smb: \> exit
 ```
 
-The .vbs files didn't have any hardcoded credentials. However, the file `Meeting_Notes_June_2018.html` did allude to a "TempAdmin" user that may exist or have been deleted which would share a password wit hthe "normal admin account". This could come in handy later.
+The .vbs files didn't have any hardcoded credentials. However, the file `Meeting_Notes_June_2018.html` did allude to a "TempAdmin" user that may exist or have been deleted which would share a password with the "normal admin account". This could come in handy later.
 ```
 <p>-- We will be using a temporary account to
 perform all tasks related to the network migration and this account will be deleted at the end of
